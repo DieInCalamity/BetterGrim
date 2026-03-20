@@ -44,7 +44,7 @@ public class BadPacketsL extends Check implements PacketCheck {
                         + ", face=" + packet.getBlockFace()
                         + ", sequence=" + packet.getSequence()
                         + ", action=" + packet.getAction().toString().toLowerCase(Locale.ROOT)
-                ) && shouldModifyPackets() && packet.getAction() != DiggingAction.RELEASE_USE_ITEM) {
+                ) && shouldModifyPackets() && canCancel(packet.getAction())) {
                     event.setCancelled(true);
                     player.onPacketCancel();
                     GrimAPI.INSTANCE.getItemResetHandler().resetItemUsage(player.platformPlayer); // fix a noslow bypass

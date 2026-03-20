@@ -12,10 +12,7 @@ import ac.grim.grimac.checks.impl.chat.ChatA;
 import ac.grim.grimac.checks.impl.chat.ChatB;
 import ac.grim.grimac.checks.impl.chat.ChatC;
 import ac.grim.grimac.checks.impl.chat.ChatD;
-import ac.grim.grimac.checks.impl.combat.Hitboxes;
-import ac.grim.grimac.checks.impl.combat.MultiInteractA;
-import ac.grim.grimac.checks.impl.combat.MultiInteractB;
-import ac.grim.grimac.checks.impl.combat.Reach;
+import ac.grim.grimac.checks.impl.combat.*;
 import ac.grim.grimac.checks.impl.crash.*;
 import ac.grim.grimac.checks.impl.elytra.*;
 import ac.grim.grimac.checks.impl.exploit.*;
@@ -62,6 +59,7 @@ import com.github.retrooper.packetevents.event.PacketReceiveEvent;
 import com.github.retrooper.packetevents.event.PacketSendEvent;
 import com.google.common.collect.ClassToInstanceMap;
 import com.google.common.collect.ImmutableClassToInstanceMap;
+import lombok.Getter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -79,7 +77,8 @@ public class CheckManager {
     private final ClassToInstanceMap<BlockBreakCheck> blockBreakChecks;
     private final ClassToInstanceMap<BlockPlaceCheck> blockPlaceChecks;
     private final ClassToInstanceMap<PostPredictionCheck> postPredictionChecks;
-    private PacketEntityReplication packetEntityReplication = null;
+    @Getter
+    private final PacketEntityReplication packetEntityReplication;
 
     private final List<PacketCheck> packetChecksValues;
     private final List<PositionCheck> positionChecksValues;
@@ -91,11 +90,13 @@ public class CheckManager {
     private final List<PostPredictionCheck> postPredictionChecksValues;
 
     public CheckManager(GrimPlayer player) {
+        packetEntityReplication = new PacketEntityReplication(player);
+
         packetChecks = new ImmutableClassToInstanceMap.Builder<PacketCheck>()
                 .put(CompensatedCameraEntity.class, player.cameraEntity)
                 .put(PacketOrderProcessor.class, player.packetOrderProcessor)
                 .put(Reach.class, new Reach(player))
-                .put(PacketEntityReplication.class, new PacketEntityReplication(player))
+                .put(PacketEntityReplication.class, packetEntityReplication)
                 .put(PacketChangeGameState.class, new PacketChangeGameState(player))
                 .put(CompensatedInventory.class, player.inventory)
                 .put(PacketPlayerAbilities.class, new PacketPlayerAbilities(player))
@@ -114,7 +115,6 @@ public class CheckManager {
                 .put(ExploitC.class, new ExploitC(player))
                 .put(BadPacketsA.class, new BadPacketsA(player))
                 .put(BadPacketsB.class, new BadPacketsB(player))
-                .put(BadPacketsC.class, new BadPacketsC(player))
                 .put(BadPacketsD.class, new BadPacketsD(player))
                 .put(BadPacketsE.class, new BadPacketsE(player))
                 .put(BadPacketsF.class, new BadPacketsF(player))
@@ -134,6 +134,7 @@ public class CheckManager {
                 .put(BadPacketsV.class, new BadPacketsV(player))
                 .put(BadPacketsY.class, new BadPacketsY(player))
                 .put(BadPacketsZ.class, new BadPacketsZ(player))
+                .put(SelfInteract.class, new SelfInteract(player))
                 .put(MultiActionsA.class, new MultiActionsA(player))
                 .put(InventoryA.class, new InventoryA(player))
                 .put(InventoryB.class, new InventoryB(player))
@@ -321,6 +322,21 @@ public class CheckManager {
         return (T) blockPlaceChecks.get(check);
     }
 
+    @SuppressWarnings("unchecked")
+    public <T extends PacketCheck> T getPacketCheck(Class<T> check) {
+        return (T) packetChecks.get(check);
+    }
+
+    @SuppressWarnings("unchecked")
+    public <T extends PacketCheck> T getPrePredictionCheck(Class<T> check) {
+        return (T) prePredictionChecks.get(check);
+    }
+
+    @SuppressWarnings("unchecked")
+    public <T extends PostPredictionCheck> T getPostPredictionCheck(Class<T> check) {
+        return (T) postPredictionChecks.get(check);
+    }
+
     public void onPrePredictionReceivePacket(final PacketReceiveEvent packet) {
         for (PacketCheck check : prePredictionChecksValues) {
             check.onPacketReceive(packet);
@@ -427,22 +443,6 @@ public class CheckManager {
         return getPostPredictionCheck(ExplosionHandler.class);
     }
 
-    @SuppressWarnings("unchecked")
-    public <T extends PacketCheck> T getPacketCheck(Class<T> check) {
-        return (T) packetChecks.get(check);
-    }
-
-    @SuppressWarnings("unchecked")
-    public <T extends PacketCheck> T getPrePredictionCheck(Class<T> check) {
-        return (T) prePredictionChecks.get(check);
-    }
-
-    public PacketEntityReplication getEntityReplication() {
-        if (packetEntityReplication == null)
-            packetEntityReplication = getPacketCheck(PacketEntityReplication.class);
-        return packetEntityReplication;
-    }
-
     public NoFall getNoFall() {
         return getPacketCheck(NoFall.class);
     }
@@ -465,15 +465,6 @@ public class CheckManager {
 
     public DebugHandler getDebugHandler() {
         return getPostPredictionCheck(DebugHandler.class);
-    }
-
-    public OffsetHandler getOffsetHandler() {
-        return getPostPredictionCheck(OffsetHandler.class);
-    }
-
-    @SuppressWarnings("unchecked")
-    public <T extends PostPredictionCheck> T getPostPredictionCheck(Class<T> check) {
-        return (T) postPredictionChecks.get(check);
     }
 
     private void init() {
