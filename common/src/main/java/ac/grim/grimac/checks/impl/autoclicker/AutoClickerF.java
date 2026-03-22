@@ -20,7 +20,6 @@ public class AutoClickerF extends Check implements PacketCheck {
     private long lastSwingTime = -1L;
     private boolean digging = false;
 
-    // Configuration
     private int sampleSize;
     private double minCPS;
     private double maxCPS;
@@ -31,7 +30,6 @@ public class AutoClickerF extends Check implements PacketCheck {
     private double bufferDecrease;
     private double bufferLimit;
 
-    // Buffers and counters
     private double deviationBuffer = 0.0;
     private double patternBuffer = 0.0;
     private double repetitionBuffer = 0.0;
@@ -42,7 +40,6 @@ public class AutoClickerF extends Check implements PacketCheck {
 
     @Override
     public void onPacketReceive(PacketReceiveEvent event) {
-        // Detect if the player is digging blocks
         if (event.getPacketType() == PacketType.Play.Client.PLAYER_DIGGING) {
             WrapperPlayClientPlayerDigging dig = new WrapperPlayClientPlayerDigging(event);
             switch (dig.getAction()) {
@@ -52,19 +49,17 @@ public class AutoClickerF extends Check implements PacketCheck {
             return;
         }
 
-        // Ignore during mining or recent attacks
         if (event.getPacketType() != PacketType.Play.Client.ANIMATION) return;
-        if (digging || player.actionManager.hasAttackedSince(500)) return;
+        if (digging || player.attackCooldown.getMinimumProgress() <= 0.9F) return;
 
         long now = System.currentTimeMillis();
 
         if (lastSwingTime != -1L) {
             long interval = now - lastSwingTime;
 
-            if (interval >= 25 && interval <= 500) { // Stricter range for better detection
+            if (interval >= 25 && interval <= 500) {
                 intervals.add(interval);
 
-                // Calculate instant deviation ratio
                 if (intervals.size() >= 2) {
                     double currentDeviation = calculateInstantDeviationRatio();
                     deviationRatios.add(currentDeviation);
@@ -88,13 +83,12 @@ public class AutoClickerF extends Check implements PacketCheck {
         if (previous == 0) return 0.0;
 
         double ratio = (double) Math.abs(current - previous) / previous;
-        return ratio * 100; // Convert to percentage
+        return ratio * 100;
     }
 
     private void analyzeModifiedPatterns() {
         double avgCPS = 1000.0 / GrimMath.getAverageLong(intervals);
 
-        // Analyze only within CPS range
         if (avgCPS < minCPS || avgCPS > maxCPS) {
             deviationBuffer = Math.max(0, deviationBuffer - bufferDecrease);
             patternBuffer = Math.max(0, patternBuffer - bufferDecrease);
@@ -102,7 +96,6 @@ public class AutoClickerF extends Check implements PacketCheck {
             return;
         }
 
-        // 1. Artificial Deviation Detection
         double avgDeviationRatio = GrimMath.getAverage(deviationRatios);
         if (avgDeviationRatio < deviationThreshold) {
             deviationBuffer += (deviationThreshold - avgDeviationRatio) * bufferIncrease;
@@ -110,7 +103,6 @@ public class AutoClickerF extends Check implements PacketCheck {
             deviationBuffer = Math.max(0, deviationBuffer - bufferDecrease);
         }
 
-        // 2. Pattern Similarity Detection
         double patternScore = analyzePatternSimilarity();
         if (patternScore > patternSimilarityThreshold) {
             patternBuffer += (patternScore - patternSimilarityThreshold) * bufferIncrease;
@@ -118,7 +110,6 @@ public class AutoClickerF extends Check implements PacketCheck {
             patternBuffer = Math.max(0, patternBuffer - bufferDecrease);
         }
 
-        // 3. Interval Repetition Detection
         double repetitionScore = analyzeIntervalRepetition();
         if (repetitionScore > repetitionThreshold) {
             repetitionBuffer += (repetitionScore - repetitionThreshold) * bufferIncrease;
@@ -126,7 +117,6 @@ public class AutoClickerF extends Check implements PacketCheck {
             repetitionBuffer = Math.max(0, repetitionBuffer - bufferDecrease);
         }
 
-        // Combine detections
         double totalBuffer = deviationBuffer + patternBuffer + repetitionBuffer;
 
         if (totalBuffer > bufferLimit) {
@@ -135,12 +125,10 @@ public class AutoClickerF extends Check implements PacketCheck {
                 deviationBuffer, patternBuffer, repetitionBuffer, avgCPS, avgDeviationRatio, totalBuffer
             ));
 
-            // Soft reset of buffers
             deviationBuffer *= 0.6;
             patternBuffer *= 0.6;
             repetitionBuffer *= 0.6;
 
-            // Clear some samples to avoid constant detection
             if (intervals.size() > sampleSize / 2) {
                 intervals.clear();
                 deviationRatios.clear();
@@ -154,7 +142,6 @@ public class AutoClickerF extends Check implements PacketCheck {
         int similarPatterns = 0;
         int totalComparisons = 0;
 
-        // Compare sequences of 3 intervals
         for (int i = 0; i < intervals.size() - 3; i++) {
             long[] pattern1 = {
                 intervals.get(i),
@@ -180,7 +167,7 @@ public class AutoClickerF extends Check implements PacketCheck {
     }
 
     private boolean arePatternsSimilar(long[] pattern1, long[] pattern2) {
-        double tolerance = 0.15; // 15% tolerance
+        double tolerance = 0.15;
 
         for (int i = 0; i < pattern1.length; i++) {
             double diff = Math.abs(pattern1[i] - pattern2[i]);
@@ -198,7 +185,6 @@ public class AutoClickerF extends Check implements PacketCheck {
 
         int repetitions = 0;
 
-        // Look for identical or very similar intervals
         for (int i = 0; i < intervals.size() - 1; i++) {
             long current = intervals.get(i);
 
@@ -206,13 +192,12 @@ public class AutoClickerF extends Check implements PacketCheck {
                 long other = intervals.get(j);
                 double diff = Math.abs(current - other);
 
-                if (diff <= 2) { // 2ms difference or less
+                if (diff <= 2) {
                     repetitions++;
                 }
             }
         }
 
-        // Normalize based on possible comparisons
         int maxComparisons = intervals.size() * (intervals.size() - 1) / 2;
         return maxComparisons > 0 ? (double) repetitions / maxComparisons * 100 : 0.0;
     }

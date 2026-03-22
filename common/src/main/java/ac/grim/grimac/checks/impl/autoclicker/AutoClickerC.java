@@ -41,7 +41,6 @@ public class AutoClickerC extends Check implements PacketCheck {
 
     @Override
     public void onPacketReceive(PacketReceiveEvent event) {
-        // Detect if the player is breaking blocks
         if (event.getPacketType() == PacketType.Play.Client.PLAYER_DIGGING) {
             WrapperPlayClientPlayerDigging dig = new WrapperPlayClientPlayerDigging(event);
             switch (dig.getAction()) {
@@ -51,15 +50,13 @@ public class AutoClickerC extends Check implements PacketCheck {
             return;
         }
 
-        // Ignore swings during block mining or recent attacks
         if (event.getPacketType() != PacketType.Play.Client.ANIMATION) return;
-        if (digging || player.actionManager.hasAttackedSince(500)) return;
+        if (digging) return;
 
         long now = System.currentTimeMillis();
 
         if (lastSwingTime != -1L) {
             long delay = now - lastSwingTime;
-            // Only process reasonable intervals (20ms to 1000ms)
             if (delay >= 20 && delay <= 1000) {
                 double cps = 1000.0 / delay;
                 cpsSamples.add(cps);
@@ -67,7 +64,7 @@ public class AutoClickerC extends Check implements PacketCheck {
         }
         lastSwingTime = now;
 
-        int currentTick = player.totalFlyingPacketsSent;
+        int currentTick = player.movementPackets;
         int delta = currentTick - lastClickTick;
         if (lastClickTick != 0 && delta >= 1 && delta <= 20) {
             tickDeltas.add(delta);
@@ -86,38 +83,30 @@ public class AutoClickerC extends Check implements PacketCheck {
             if (v > max) max = v;
         }
 
-        // 1. Detect unstable CPS deviation (randomness too high)
         if (avg > cpsThreshold && stdDev > unstableThreshold) {
             deviationBuffer += (stdDev - unstableThreshold) * 0.5;
         } else {
             deviationBuffer = Math.max(0.0, deviationBuffer - bufferDecrement);
         }
 
-        // 2. Detect clicking spikes (max CPS much higher than average)
         if (avg > 0 && max / avg >= spikeMultiplier && avg > cpsThreshold) {
             spikeBuffer += (max / avg - spikeMultiplier) * 0.8;
         } else {
             spikeBuffer = Math.max(0.0, spikeBuffer - spikeBufferDecrement);
         }
 
-        // 3. Trigger detection with combined conditions
         if (deviationBuffer > deviationBufferTrigger && spikeBuffer > spikeBufferTrigger) {
             flagAndAlert(String.format(
                 "type=unstable_spike cps=%.1f max=%.1f dev=%.2f dev_buf=%.1f spike_buf=%.1f",
                 avg, max, stdDev, deviationBuffer, spikeBuffer
             ));
 
-            // Soft reset buffers after detection
             deviationBuffer *= 0.6;
             spikeBuffer *= 0.6;
 
-            // Clear samples to avoid repeated detections on same pattern
             cpsSamples.clear();
             tickDeltas.clear();
-        }
-
-        // Additional detection: Very high deviation alone
-        else if (deviationBuffer > deviationBufferTrigger * 1.5) {
+        } else if (deviationBuffer > deviationBufferTrigger * 1.5) {
             flagAndAlert(String.format(
                 "type=high_deviation cps=%.1f dev=%.2f dev_buf=%.1f",
                 avg, stdDev, deviationBuffer

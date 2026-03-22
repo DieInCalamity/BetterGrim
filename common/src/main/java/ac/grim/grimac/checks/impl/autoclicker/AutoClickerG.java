@@ -23,7 +23,6 @@ public class AutoClickerG extends Check implements PacketCheck {
     private long burstStartTime = -1L;
     private boolean digging = false;
 
-    // Configuration
     private int sampleSize;
     private double minBurstCPS;
     private double maxAllowedBurstLength;
@@ -35,7 +34,6 @@ public class AutoClickerG extends Check implements PacketCheck {
     private double bufferDecrease;
     private double bufferLimit;
 
-    // Detection buffers
     private double burstBuffer = 0.0;
     private double distributionBuffer = 0.0;
     private double frequencyBuffer = 0.0;
@@ -46,7 +44,6 @@ public class AutoClickerG extends Check implements PacketCheck {
 
     @Override
     public void onPacketReceive(PacketReceiveEvent event) {
-        // Detect if the player is mining blocks
         if (event.getPacketType() == PacketType.Play.Client.PLAYER_DIGGING) {
             WrapperPlayClientPlayerDigging dig = new WrapperPlayClientPlayerDigging(event);
             switch (dig.getAction()) {
@@ -56,9 +53,8 @@ public class AutoClickerG extends Check implements PacketCheck {
             return;
         }
 
-        // Ignore during mining or recent attacks
         if (event.getPacketType() != PacketType.Play.Client.ANIMATION) return;
-        if (digging || player.actionManager.hasAttackedSince(500)) return;
+        if (digging || player.attackCooldown.getMinimumProgress() <= 0.9F) return;
 
         long now = System.currentTimeMillis();
 
@@ -67,11 +63,8 @@ public class AutoClickerG extends Check implements PacketCheck {
 
             if (interval >= 20 && interval <= 1000) {
                 intervals.add(interval);
-
-                // Burst clicking analysis
                 analyzeBurstPattern(interval, now);
 
-                // Temporal distribution analysis
                 if (intervals.size() >= 10) {
                     analyzeTemporalDistribution();
                 }
@@ -85,14 +78,12 @@ public class AutoClickerG extends Check implements PacketCheck {
     }
 
     private void analyzeBurstPattern(long interval, long currentTime) {
-        // Detect burst start (consecutive short intervals)
-        if (interval <= 100) { // Less than 100ms between clicks
+        if (interval <= 100) {
             if (currentBurstCount == 0) {
                 burstStartTime = currentTime;
             }
             currentBurstCount++;
         } else {
-            // Burst ended
             if (currentBurstCount > 0) {
                 long burstDuration = currentTime - burstStartTime;
                 double burstCPS = (currentBurstCount * 1000.0) / Math.max(1, burstDuration);
@@ -108,7 +99,6 @@ public class AutoClickerG extends Check implements PacketCheck {
     }
 
     private void analyzeTemporalDistribution() {
-        // Measure how uniformly spaced the clicks are over time
         double[] normalizedIntervals = new double[intervals.size()];
         double sum = 0;
 
@@ -117,20 +107,16 @@ public class AutoClickerG extends Check implements PacketCheck {
         }
         double mean = sum / intervals.size();
 
-        // Normalize intervals
         for (int i = 0; i < intervals.size(); i++) {
             normalizedIntervals[i] = intervals.get(i) / mean;
         }
 
-        // Calculate deviation from randomness
         double distributionScore = calculateDistributionScore(normalizedIntervals);
         distributionScores.add(distributionScore);
     }
 
     private double calculateDistributionScore(double[] normalizedIntervals) {
-        // Human clicking is more random. Autoclickers have more predictable patterns.
-
-        double runs = 1; // Count "runs" — changes between high/low values
+        double runs = 1;
         double lastValue = normalizedIntervals[0];
 
         for (int i = 1; i < normalizedIntervals.length; i++) {
@@ -141,7 +127,6 @@ public class AutoClickerG extends Check implements PacketCheck {
             lastValue = normalizedIntervals[i];
         }
 
-        // Wald-Wolfowitz runs test for randomness
         double n = normalizedIntervals.length;
         double expectedRuns = (2 * n - 1) / 3.0;
         double variance = (16 * n - 29) / 90.0;
@@ -153,7 +138,6 @@ public class AutoClickerG extends Check implements PacketCheck {
     }
 
     private void performAdvancedAnalysis() {
-        // 1. Abnormal burst detection
         if (!burstLengths.isEmpty()) {
             double avgBurstLength = GrimMath.getAverageInt(burstLengths);
             if (avgBurstLength > maxAllowedBurstLength) {
@@ -163,7 +147,6 @@ public class AutoClickerG extends Check implements PacketCheck {
 
         burstBuffer = Math.max(0, burstBuffer - bufferDecrease);
 
-        // 2. Temporal distribution anomalies
         if (!distributionScores.isEmpty()) {
             double avgDistributionScore = GrimMath.getAverage(distributionScores);
             if (avgDistributionScore < distributionAnomalyThreshold) {
@@ -173,7 +156,6 @@ public class AutoClickerG extends Check implements PacketCheck {
 
         distributionBuffer = Math.max(0, distributionBuffer - bufferDecrease);
 
-        // 3. Burst frequency detection
         if (!burstLengths.isEmpty()) {
             double burstFrequency = (double) burstLengths.size() / intervals.size() * 100;
             if (burstFrequency > burstFrequencyThreshold) {
@@ -183,7 +165,6 @@ public class AutoClickerG extends Check implements PacketCheck {
 
         frequencyBuffer = Math.max(0, frequencyBuffer - bufferDecrease);
 
-        // Combine all detections
         double totalBuffer = burstBuffer + distributionBuffer + frequencyBuffer;
 
         if (totalBuffer > bufferLimit) {
@@ -194,12 +175,10 @@ public class AutoClickerG extends Check implements PacketCheck {
                 currentCPS, burstBuffer, distributionBuffer, frequencyBuffer, totalBuffer
             ));
 
-            // Soft reset
             burstBuffer *= 0.6;
             distributionBuffer *= 0.6;
             frequencyBuffer *= 0.6;
 
-            // Clear some samples but keep history
             if (intervals.size() > sampleSize / 2) {
                 intervals.clear();
                 burstLengths.clear();

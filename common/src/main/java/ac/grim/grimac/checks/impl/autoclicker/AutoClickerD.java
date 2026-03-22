@@ -34,7 +34,6 @@ public class AutoClickerD extends Check implements PacketCheck {
 
     @Override
     public void onPacketReceive(PacketReceiveEvent event) {
-        // Detect block breaking
         if (event.getPacketType() == PacketType.Play.Client.PLAYER_DIGGING) {
             WrapperPlayClientPlayerDigging dig = new WrapperPlayClientPlayerDigging(event);
             switch (dig.getAction()) {
@@ -46,24 +45,18 @@ public class AutoClickerD extends Check implements PacketCheck {
             return;
         }
 
-        // Only process animation packets (clicks)
         if (event.getPacketType() != PacketType.Play.Client.ANIMATION) return;
-
-        // Ignore during mining or recent attacks
-        if (digging || player.actionManager.hasAttackedSince(500)) return;
+        if (digging) return;
 
         long now = System.currentTimeMillis();
 
         if (lastClickTime != -1L) {
             long interval = now - lastClickTime;
-
-            // Only process reasonable intervals (10ms to 500ms = 2-100 CPS)
             if (interval >= 10 && interval <= 500) {
                 clickIntervals.add(interval);
 
                 if (clickIntervals.isCollected()) {
                     analyzePattern();
-                    // Clear to analyze new patterns
                     clickIntervals.clear();
                 }
             }
@@ -77,25 +70,20 @@ public class AutoClickerD extends Check implements PacketCheck {
         double stdDev = GrimMath.getStandardDeviationLong(clickIntervals);
         double cps = 1000.0 / avgInterval;
 
-        // Detect highly consistent, non-human clicking patterns
-        // High CPS + very low standard deviation = suspicious consistency
         if (cps > cpsThreshold && stdDev < stdDevThreshold) {
             buffer += (stdDevThreshold - stdDev) * bufferIncrease;
         } else {
             buffer = Math.max(0, buffer - bufferDecrease);
         }
 
-        // Trigger detection
         if (buffer > bufferTrigger) {
             flagAndAlert(String.format(
                 "type=drag_jitter cps=%.1f dev=%.3f buf=%.1f",
                 cps, stdDev, buffer
             ));
 
-            // Soft reset after detection
             buffer *= 0.5;
 
-            // Optional: Clear less samples to maintain some history
             if (clickIntervals.size() > sampleSize / 2) {
                 clickIntervals.clear();
             }
