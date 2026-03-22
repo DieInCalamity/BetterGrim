@@ -101,7 +101,7 @@ public class CheckManager {
                 .put(CompensatedInventory.class, player.inventory)
                 .put(PacketPlayerAbilities.class, new PacketPlayerAbilities(player))
                 .put(PacketWorldBorder.class, new PacketWorldBorder(player))
-                .put(ActionManager.class, player.actionManager)
+                .put(AttackCooldownHandler.class, player.attackCooldown)
                 .put(TeamHandler.class, new TeamHandler(player))
                 .put(ClientBrand.class, new ClientBrand(player))
                 .put(NoWeb.class, new NoWeb(player))
