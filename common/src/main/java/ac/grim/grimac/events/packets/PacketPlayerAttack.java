@@ -16,8 +16,10 @@ import com.github.retrooper.packetevents.protocol.item.ItemStack;
 import com.github.retrooper.packetevents.protocol.item.enchantment.type.EnchantmentTypes;
 import com.github.retrooper.packetevents.protocol.packettype.PacketType;
 import com.github.retrooper.packetevents.protocol.player.ClientVersion;
+import com.github.retrooper.packetevents.protocol.player.DiggingAction;
 import com.github.retrooper.packetevents.protocol.player.GameMode;
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientInteractEntity;
+import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientPlayerDigging;
 
 public class PacketPlayerAttack extends PacketListenerAbstract {
 
@@ -106,6 +108,18 @@ public class PacketPlayerAttack extends PacketListenerAbstract {
                 if (player.compensatedEntities.getEntity(interact.getEntityId()) instanceof PacketEntityHorse
                         && player.getClientVersion().isOlderThanOrEquals(ClientVersion.V_1_13)) {
                     player.packetStateData.horseInteractCausedForcedRotation = true;
+                }
+            }
+        }
+
+        if (event.getPacketType() == PacketType.Play.Client.PLAYER_DIGGING) {
+            WrapperPlayClientPlayerDigging packet = new WrapperPlayClientPlayerDigging(event);
+            if (packet.getAction() == DiggingAction.STAB) {
+                GrimPlayer player = GrimAPI.INSTANCE.getPlayerDataManager().getPlayer(event.getUser());
+                if (player == null) return;
+
+                if (player.isResetItemUsageOnAttack()) {
+                    GrimAPI.INSTANCE.getItemResetHandler().resetItemUsage(player.platformPlayer);
                 }
             }
         }
