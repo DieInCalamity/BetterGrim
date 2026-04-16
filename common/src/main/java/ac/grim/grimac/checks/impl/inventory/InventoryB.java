@@ -18,7 +18,7 @@ public class InventoryB extends Check implements PacketCheck {
         if (event.getPacketType() != PacketType.Play.Client.CLOSE_WINDOW) return;
         if (player.serverOpenedInventoryThisTick) return;
 
-        String verbose = MultiActionsC.getVerbose(player);
+        String verbose = InventoryA.getVerbose(player);
         if (verbose.isEmpty()) return;
 
         // Don't cancel this packet, because it won't do anything except for making chests
