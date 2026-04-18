@@ -9,10 +9,12 @@ import ac.grim.grimac.utils.math.GrimMath;
 import ac.grim.grimac.utils.math.Vector3dm;
 import ac.grim.grimac.utils.nmsutil.FluidTypeFlowing;
 import ac.grim.grimac.utils.nmsutil.Materials;
+import com.github.retrooper.packetevents.PacketEvents;
+import com.github.retrooper.packetevents.manager.server.ServerVersion;
 import com.github.retrooper.packetevents.protocol.world.chunk.BaseChunk;
+import com.github.retrooper.packetevents.protocol.world.chunk.impl.v_1_18.Chunk_v1_18;
 
 import java.util.EnumMap;
-import java.util.Map.Entry;
 
 public class EntityFluidInteraction {
     private final EnumMap<FluidTag, EntityFluidInteraction.Tracker> trackerByFluid = new EnumMap<>(FluidTag.class);
@@ -87,6 +89,8 @@ public class EntityFluidInteraction {
         }
     }
 
+    private static final boolean HAS_FLUID_COUNT = PacketEvents.getAPI().getServerManager().getVersion().isNewerThanOrEquals(ServerVersion.V_26_1);
+
     private static boolean hasFluidAndLoaded(final CompensatedWorld level, final int x0, final int y0, final int z0, final int x1, final int y1, final int z1) {
         int minX = x0 >> 4;
         int minY = y0 >> 4;
@@ -96,9 +100,9 @@ public class EntityFluidInteraction {
         int maxZ = z1 >> 4;
         boolean hasFluidAndLoaded = false;
 
-        for (int x = minZ; x <= maxZ; x++) {
-            for (int z = minX; z <= maxX; z++) {
-                Column chunk = level.getChunk(z, x);
+        for (int z = minZ; z <= maxZ; z++) {
+            for (int x = minX; x <= maxX; x++) {
+                Column chunk = level.getChunk(x, z);
                 if (chunk == null) {
                     return false;
                 }
@@ -108,8 +112,11 @@ public class EntityFluidInteraction {
                 for (int y = minY; y <= maxY; y++) {
                     int sectionY = y - (level.getMinHeight() >> 4);
                     if (sectionY >= 0 && sectionY < sections.length) {
-//                        hasFluidAndLoaded |= sections[sectionY].hasFluid(); // TODO fluid count tracker
-                        hasFluidAndLoaded |= true;
+                        if (HAS_FLUID_COUNT && sections[sectionY] instanceof Chunk_v1_18 target) {
+                            hasFluidAndLoaded |= target.getFluidCount() != 0;
+                        } else {
+                            hasFluidAndLoaded = true;
+                        }
                     }
                 }
             }
